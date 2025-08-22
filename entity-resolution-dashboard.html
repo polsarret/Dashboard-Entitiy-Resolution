@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entity Resolution Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .upload-section {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .file-upload {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-upload:hover {
+            background: #f8f9ff;
+            border-color: #764ba2;
+        }
+
+        .file-upload.active {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card.auto {
+            border-left: 5px solid #4caf50;
+        }
+
+        .stat-card.probable {
+            border-left: 5px solid #ff9800;
+        }
+
+        .stat-card.none {
+            border-left: 5px solid #f44336;
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-card .percentage {
+            color: #999;
+            font-size: 1.1em;
+            margin-top: 5px;
+        }
+
+        .charts-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .chart-container h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        .table-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .tab.active {
+            color: #667eea;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #667eea;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f5f5f5;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr:hover {
+            background: #f9f9f9;
+        }
+
+        .score-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .score-high {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .score-medium {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .score-low {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95em;
+        }
+
+        .match-details {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+
+        .match-details.show {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🔍 Entity Resolution Dashboard</h1>
+            <p>Análisis y visualización de reconciliación de empresas entre hojas de cálculo</p>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="upload-section">
+            <div class="file-upload" id="dropZone">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <h3>Arrastra aquí tu archivo de resultados</h3>
+                <p>o haz clic para seleccionar (Excel, CSV o JSON)</p>
+                <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.json">
+            </div>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Procesando archivo...</p>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid" id="statsGrid" style="display: none;">
+            <div class="stat-card auto">
+                <h3>Matches Automáticos</h3>
+                <div class="number" id="autoMatches">0</div>
+                <div class="percentage" id="autoPercentage">0%</div>
+            </div>
+            <div class="stat-card probable">
+                <h3>Matches Probables</h3>
+                <div class="number" id="probableMatches">0</div>
+                <div class="percentage" id="probablePercentage">0%</div>
+            </div>
+            <div class="stat-card none">
+                <h3>Sin Match</h3>
+                <div class="number" id="noMatches">0</div>
+                <div class="percentage" id="noPercentage">0%</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Empresas</h3>
+                <div class="number" id="totalCompanies">0</div>
+                <div class="percentage">Sheet 1</div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-section" id="chartsSection" style="display: none;">
+            <div class="chart-container">
+                <h2>Distribución de Matches</h2>
+                <canvas id="pieChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2>Distribución de Scores</h2>
+                <canvas id="barChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Table Section -->
+        <div class="table-section" id="tableSection" style="display: none;">
+            <h2>Detalle de Matches</h2>
+            
+            <!-- Filters -->
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Buscar empresa:</label>
+                    <input type="text" id="searchInput" placeholder="Nombre de empresa...">
+                </div>
+                <div class="filter-group">
+                    <label>Score mínimo:</label>
+                    <input type="number" id="minScore" min="0" max="1" step="0.1" value="0">
+                </div>
+                <div class="filter-group">
+                    <label>Tipo de match:</label>
+                    <select id="matchType">
+                        <option value="all">Todos</option>
+                        <option value="auto">Automáticos</option>
+                        <option value="probable">Probables</option>
+                        <option value="none">Sin match</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="all">Todos los Matches</button>
+                <button class="tab" data-tab="auto">Automáticos</button>
+                <button class="tab" data-tab="probable">Probables</button>
+                <button class="tab" data-tab="none">Sin Match</button>
+            </div>
+
+            <!-- Table -->
+            <div class="table-wrapper">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Empresa Sheet 1</th>
+                            <th>Empresa Sheet 2</th>
+                            <th>Score</th>
+                            <th>Método</th>
+                            <th>Revisión</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Data will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Export Buttons -->
+            <div class="export-buttons">
+                <button class="btn btn-primary" onclick="exportToExcel()">
+                    📊 Exportar a Excel
+                </button>
+                <button class="btn btn-secondary" onclick="exportToCSV()">
+                    📄 Exportar a CSV
+                </button>
+                <button class="btn btn-secondary" onclick="downloadReport()">
+                    📑 Generar Reporte PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let globalData = null;
+        let pieChart = null;
+        let barChart = null;
+
+        // File upload handling
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const loading = document.getElementById('loading');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('active');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('active');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('active');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            const fileName = file.name.toLowerCase();
+            loading.classList.add('active');
+            dropZone.style.display = 'none';
+
+            if (fileName.endsWith('.json')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        processData(data);
+                    } catch (error) {
+                        alert('Error al procesar el archivo JSON');
+                        resetUpload();
+                    }
+                };
+                reader.readAsText(file);
+            } else if (fileName.endsWith('.csv')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const csv = e.target.result;
+                    const data = parseCSV(csv);
+                    processData(data);
+                };
+                reader.readAsText(file);
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const jsonData = parseExcel(workbook);
+                    processData(jsonData);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                alert('Formato de archivo no soportado');
+                resetUpload();
+            }
+        }
+
+        function resetUpload() {
+            loading.classList.remove('active');
+            dropZone.style.display = 'block';
+        }
+
+        function parseCSV(csv) {
+            const lines = csv.split('\n');
+            const headers = lines[0].split(',');
+            const data = {
+                matches_automaticos: [],
+                matches_probables: [],
+                sin_match: [],
+                estadisticas: {}
+            };
+
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    const values = lines[i].split(',');
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header.trim()] = values[index]?.trim();
+                    });
+
+                    const score = parseFloat(row.score_confianza || 0);
+                    if (score >= 0.95) {
+                        data.matches_automaticos.push(row);
+                    } else if (score >= 0.85) {
+                        data.matches_probables.push(row);
+                    } else {
+                        data.sin_match.push(row);
+                    }
+                }
+            }
+
+            // Calculate statistics
+            const total = data.matches_automaticos.length + 
+                         data.matches_probables.length + 
+                         data.sin_match.length;
+            
+            data.estadisticas = {
+                total_empresas_sheet1: total,
+                matches_automaticos: data.matches_automaticos.length,
+                matches_probables: data.matches_probables.length,
+                sin_match: data.sin_match.length,
+                porcentaje_matches_auto: (data.matches_automaticos.length / total * 100).toFixed(2),
+                porcentaje_matches_probables: (data.matches_probables.length / total * 100).toFixed(2),
+                porcentaje_sin_match: (data.sin_match.length / total * 100).toFixed(2)
+            };
+
+            return data;
+        }
+
+        function parseExcel(workbook) {
+            const data = {
+                matches_automaticos: [],
+                matches_probables: [],
+                sin_match: [],
+                estadisticas: {}
+            };
+
+            // Try to find the sheets
+            const sheets = workbook.SheetNames;
+            
+            sheets.forEach(sheetName => {
+                const sheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(sheet);
+                
+                if (sheetName.includes('Automatico')) {
+                    data.matches_automaticos = jsonData;
+                } else if (sheetName.includes('Probable')) {
+                    data.matches_probables = jsonData;
+                } else if (sheetName.includes('Sin_Match')) {
+                    data.sin_match = jsonData;
+                } else if (sheetName.includes('Estadistica')) {
+                    data.estadisticas = jsonData[0] || {};
+                } else if (sheetName.includes('Mapeo_Completo')) {
+                    // Parse from complete mapping if other sheets don't exist
+                    jsonData.forEach(row => {
+                        const score = parseFloat(row.score_confianza || 0);
+                        if (score >= 0.95) {
+                            data.matches_automaticos.push(row);
+                        } else if (score >= 0.85) {
+                            data.matches_probables.push(row);
+                        } else {
+                            data.sin_match.push(row);
+                        }
+                    });
+                }
+            });
+
+            // Recalculate statistics if needed
+            if (!data.estadisticas.total_empresas_sheet1) {
+                const total = data.matches_automaticos.length + 
+                             data.matches_probables.length + 
+                             data.sin_match.length;
+                
+                data.estadisticas = {
+                    total_empresas_sheet1: total,
+                    matches_automaticos: data.matches_automaticos.length,
+                    matches_probables: data.matches_probables.length,
+                    sin_match: data.sin_match.length,
+                    porcentaje_matches_auto: (data.matches_automaticos.length / total * 100).toFixed(2),
+                    porcentaje_matches_probables: (data.matches_probables.length / total * 100).toFixed(2),
+                    porcentaje_sin_match: (data.sin_match.length / total * 100).toFixed(2)
+                };
+            }
+
+            return data;
+        }
+
+        function processData(data) {
+            globalData = data;
+            
+            // Update statistics
+            updateStatistics(data.estadisticas);
+            
+            // Create charts
+            createCharts(data);
+            
+            // Populate table
+            populateTable(data);
+            
+            // Show all sections
+            document.getElementById('statsGrid').style.display = 'grid';
+            document.getElementById('chartsSection').style.display = 'grid';
+            document.getElementById('tableSection').style.display = 'block';
+            
+            loading.classList.remove('active');
+        }
+
+        function updateStatistics(stats) {
+            document.getElementById('autoMatches').textContent = stats.matches_automaticos || 0;
+            document.getElementById('autoPercentage').textContent = `${stats.porcentaje_matches_auto || 0}%`;
+            
+            document.getElementById('probableMatches').textContent = stats.matches_probables || 0;
+            document.getElementById('probablePercentage').textContent = `${stats.porcentaje_matches_probables || 0}%`;
+            
+            document.getElementById('noMatches').textContent = stats.sin_match || 0;
+            document.getElementById('noPercentage').textContent = `${stats.porcentaje_sin_match || 0}%`;
+            
+            document.getElementById('totalCompanies').textContent = stats.total_empresas_sheet1 || 0;
+        }
+
+        function createCharts(data) {
+            // Pie Chart
+            const pieCtx = document.getElementById('pieChart').getContext('2d');
+            if (pieChart) pieChart.destroy();
+            
+            pieChart = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Matches Automáticos', 'Matches Probables', 'Sin Match'],
+                    datasets: [{
+                        data: [
+                            data.matches_automaticos.length,
+                            data.matches_probables.length,
+                            data.sin_match.length
+                        ],
+                        backgroundColor: [
+                            'rgba(76, 175, 80, 0.8)',
+                            'rgba(255, 152, 0, 0.8)',
+                            'rgba(244, 67, 54, 0.8)'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.raw / total) * 100).toFixed(1);
+                                    return `${context.label}: ${context.raw} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Bar Chart - Score Distribution
+            const barCtx = document.getElementById('barChart').getContext('2d');
+            if (barChart) barChart.destroy();
+
+            // Calculate score distribution
+            const scoreRanges = {
+                '0.95-1.00': 0,
+                '0.90-0.94': 0,
+                '0.85-0.89': 0,
+                '0.80-0.84': 0,
+                '0.70-0.79': 0,
+                '< 0.70': 0
+            };
+
+            const allMatches = [...data.matches_automaticos, ...data.matches_probables, ...data.sin_match];
+            allMatches.forEach(match => {
+                const score = parseFloat(match.score_confianza || 0);
+                if (score >= 0.95) scoreRanges['0.95-1.00']++;
+                else if (score >= 0.90) scoreRanges['0.90-0.94']++;
+                else if (score >= 0.85) scoreRanges['0.85-0.89']++;
+                else if (score >= 0.80) scoreRanges['0.80-0.84']++;
+                else if (score >= 0.70) scoreRanges['0.70-0.79']++;
+                else scoreRanges['< 0.70']++;
+            });
+
+            barChart = new Chart(barCtx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(scoreRanges),
+                    datasets: [{
+                        label: 'Número de matches',
+                        data: Object.values(scoreRanges),
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function populateTable(data) {
+            const allMatches = [
+                ...data.matches_automaticos.map(m => ({...m, type: 'auto'})),
+                ...data.matches_probables.map(m => ({...m, type: 'probable'})),
+                ...data.sin_match.map(m => ({...m, type: 'none'}))
+            ];
+
+            renderTable(allMatches);
+        }
+
+        function renderTable(matches) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            matches.forEach(match => {
+                const row = document.createElement('tr');
+                const score = parseFloat(match.score_confianza || 0);
+                
+                let scoreClass = 'score-low';
+                if (score >= 0.95) scoreClass = 'score-high';
+                else if (score >= 0.85) scoreClass = 'score-medium';
+
+                row.innerHTML = `
+                    <td>${match.empresa_sheet1 || ''}</td>
+                    <td>${match.empresa_sheet2_match || 'Sin match'}</td>
+                    <td><span class="score-badge ${scoreClass}">${score.toFixed(3)}</span></td>
+                    <td>${match.metodo_match || ''}</td>
+                    <td>${match.requiere_revision === 'S' ? '⚠️ Sí' : '✅ No'}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        // Tab handling
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                const tabType = this.dataset.tab;
+                filterTable(tabType);
+            });
+        });
+
+        function filterTable(type) {
+            if (!globalData) return;
+
+            let matches = [];
+            
+            if (type === 'all') {
+                matches = [
+                    ...globalData.matches_automaticos.map(m => ({...m, type: 'auto'})),
+                    ...globalData.matches_probables.map(m => ({...m, type: 'probable'})),
+                    ...globalData.sin_match.map(m => ({...m, type: 'none'}))
+                ];
+            } else if (type === 'auto') {
+                matches = globalData.matches_automaticos;
+            } else if (type === 'probable') {
+                matches = globalData.matches_probables;
+            } else if (type === 'none') {
+                matches = globalData.sin_match;
+            }
+
+            renderTable(matches);
+        }
+
+        // Search and filter functionality
+        document.getElementById('searchInput').addEventListener('input', applyFilters);
+        document.getElementById('minScore').addEventListener('change', applyFilters);
+        document.getElementById('matchType').addEventListener('change', applyFilters);
+
+        function applyFilters() {
+            if (!globalData) return;
+
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const minScore = parseFloat(document.getElementById('minScore').value) || 0;
+            const matchType = document.getElementById('matchType').value;
+
+            let matches = [];
+            
+            // Get all matches
+            if (matchType === 'all' || matchType === 'auto') {
+                matches = matches.concat(globalData.matches_automaticos.map(m => ({...m, type: 'auto'})));
+            }
+            if (matchType === 'all' || matchType === 'probable') {
+                matches = matches.concat(globalData.matches_probables.map(m => ({...m, type: 'probable'})));
+            }
+            if (matchType === 'all' || matchType === 'none') {
+                matches = matches.concat(globalData.sin_match.map(m => ({...m, type: 'none'})));
+            }
+
+            // Apply filters
+            matches = matches.filter(match => {
+                const score = parseFloat(match.score_confianza || 0);
+                const matchesSearch = !searchTerm || 
+                    (match.empresa_sheet1 && match.empresa_sheet1.toLowerCase().includes(searchTerm)) ||
+                    (match.empresa_sheet2_match && match.empresa_sheet2_match.toLowerCase().includes(searchTerm));
+                const matchesScore = score >= minScore;
+                
+                return matchesSearch && matchesScore;
+            });
+
+            renderTable(matches);
+        }
+
+        // Export functions
+        function exportToExcel() {
+            if (!globalData) return;
+
+            const wb = XLSX.utils.book_new();
+            
+            // Add sheets
+            const wsAuto = XLSX.utils.json_to_sheet(globalData.matches_automaticos);
+            XLSX.utils.book_append_sheet(wb, wsAuto, "Matches_Automaticos");
+            
+            const wsProb = XLSX.utils.json_to_sheet(globalData.matches_probables);
+            XLSX.utils.book_append_sheet(wb, wsProb, "Matches_Probables");
+            
+            const wsNone = XLSX.utils.json_to_sheet(globalData.sin_match);
+            XLSX.utils.book_append_sheet(wb, wsNone, "Sin_Match");
+            
+            const wsStats = XLSX.utils.json_to_sheet([globalData.estadisticas]);
+            XLSX.utils.book_append_sheet(wb, wsStats, "Estadisticas");
+            
+            // Save file
+            const fileName = `entity_resolution_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+        }
+
+        function exportToCSV() {
+            if (!globalData) return;
+
+            const allMatches = [
+                ...globalData.matches_automaticos,
+                ...globalData.matches_probables,
+                ...globalData.sin_match
+            ];
+
+            const csv = convertToCSV(allMatches);
+            downloadCSV(csv, `entity_resolution_export_${new Date().toISOString().slice(0,10)}.csv`);
+        }
+
+        function convertToCSV(data) {
+            if (data.length === 0) return '';
+            
+            const headers = Object.keys(data[0]);
+            const csvHeaders = headers.join(',');
+            
+            const csvRows = data.map(row => 
+                headers.map(header => {
+                    const value = row[header] || '';
+                    return `"${value.toString().replace(/"/g, '""')}"`;
+                }).join(',')
+            );
+            
+            return [csvHeaders, ...csvRows].join('\n');
+        }
+
+        function downloadCSV(csv, filename) {
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+
+        function downloadReport() {
+            if (!globalData) return;
+
+            // Generate a simple text report
+            let report = `ENTITY RESOLUTION REPORT\n`;
+            report += `Generated: ${new Date().toLocaleString()}\n\n`;
+            report += `========================\n`;
+            report += `SUMMARY STATISTICS\n`;
+            report += `========================\n`;
+            report += `Total Companies (Sheet 1): ${globalData.estadisticas.total_empresas_sheet1}\n`;
+            report += `Automatic Matches: ${globalData.estadisticas.matches_automaticos} (${globalData.estadisticas.porcentaje_matches_auto}%)\n`;
+            report += `Probable Matches: ${globalData.estadisticas.matches_probables} (${globalData.estadisticas.porcentaje_matches_probables}%)\n`;
+            report += `No Match: ${globalData.estadisticas.sin_match} (${globalData.estadisticas.porcentaje_sin_match}%)\n\n`;
+            
+            report += `========================\n`;
+            report += `TOP AUTOMATIC MATCHES\n`;
+            report += `========================\n`;
+            globalData.matches_automaticos.slice(0, 10).forEach(match => {
+                report += `${match.empresa_sheet1} → ${match.empresa_sheet2_match} (Score: ${match.score_confianza})\n`;
+            });
+            
+            const blob = new Blob([report], { type: 'text/plain;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `entity_resolution_report_${new Date().toISOString().slice(0,10)}.txt`;
+            link.click();
+        }
+
+        // Sample data for demonstration
+        const sampleData = {
+            matches_automaticos: [
+                {empresa_sheet1: "MERCADONA SA", empresa_sheet2_match: "MERCADONA S.A.", score_confianza: 0.98, metodo_match: "exact_l2", requiere_revision: "N"},
+                {empresa_sheet1: "INDITEX", empresa_sheet2_match: "INDUSTRIA DE DISEÑO TEXTIL SA", score_confianza: 0.96, metodo_match: "fuzz_token_set", requiere_revision: "N"},
+                {empresa_sheet1: "TELEFONICA", empresa_sheet2_match: "TELEFONICA SA", score_confianza: 0.97, metodo_match: "exact_l1", requiere_revision: "N"}
+            ],
+            matches_probables: [
+                {empresa_sheet1: "BANCO SANTANDER", empresa_sheet2_match: "SANTANDER BANK", score_confianza: 0.88, metodo_match: "fuzz_partial", requiere_revision: "S"},
+                {empresa_sheet1: "BBVA", empresa_sheet2_match: "BANCO BILBAO VIZCAYA", score_confianza: 0.86, metodo_match: "contains", requiere_revision: "S"}
+            ],
+            sin_match: [
+                {empresa_sheet1: "EMPRESA LOCAL 123", empresa_sheet2_match: null, score_confianza: 0.45, metodo_match: "none", requiere_revision: "S"},
+                {empresa_sheet1: "STARTUP XYZ", empresa_sheet2_match: null, score_confianza: 0.32, metodo_match: "none", requiere_revision: "S"}
+            ],
+            estadisticas: {
+                total_empresas_sheet1: 7,
+                total_empresas_sheet2: 5,
+                matches_automaticos: 3,
+                matches_probables: 2,
+                sin_match: 2,
+                porcentaje_matches_auto: 42.86,
+                porcentaje_matches_probables: 28.57,
+                porcentaje_sin_match: 28.57
+            }
+        };
+
+        // Auto-load sample data for demonstration
+        window.addEventListener('load', () => {
+            // Uncomment the next line to auto-load sample data
+            // setTimeout(() => processData(sampleData), 1000);
+        });
+    </script>
+</body>
+</html>
